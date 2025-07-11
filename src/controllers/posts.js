@@ -256,24 +256,3 @@ export const deleteAllPosts = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to delete posts' });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
