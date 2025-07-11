@@ -96,7 +96,6 @@ export const updateUser = async (req, res) => {
     const userId = req.user.id;
     const { email, userName } = req.body;
 
-    // Check for email conflict
     if (email) {
       const existing = await User.findOne({ email, _id: { $ne: userId } });
       if (existing) {
@@ -253,14 +252,3 @@ export const getAllPostsByUserId = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to fetch posts' });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
