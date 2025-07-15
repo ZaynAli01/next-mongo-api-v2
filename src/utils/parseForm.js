@@ -1,4 +1,3 @@
-// utils/parseForm.js
 import formidable from 'formidable';
 
 export const parseForm = (req) => {
