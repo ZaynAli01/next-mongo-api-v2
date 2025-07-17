@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Post from '@/models/post.js';
+import wishList from '@/models/wishList';
 import { v2 as cloudinary } from 'cloudinary';
 
 
@@ -47,6 +48,18 @@ userSchema.pre('findOneAndDelete', async function (next) {
       }
       await post.deleteOne();
     }
+
+    try {
+      const wishlist = await wishList.findOne({ user: user._id });
+      if (wishlist) {
+        await wishlist.deleteOne({ user: user._id });
+      } else {
+        console.log('No wishlist found for user:', user._id);
+      }
+    } catch (err) {
+      console.error('Wishlist deletion error:', err);
+    }
+
   }
 
   next();
