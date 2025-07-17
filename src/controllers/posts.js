@@ -2,6 +2,7 @@ import Post from '@/models/post';
 import cloudinary from '@/config/cloudinary';
 import { parseForm } from '@/utils/parseForm.js';
 import mongoose from 'mongoose';
+import { calculateDiscount } from '@/utils/calculateDiscount';
 
 
 export const createPost = async (req, res) => {
@@ -14,29 +15,48 @@ export const createPost = async (req, res) => {
     }
 
     const result = await cloudinary.uploader.upload(imageFile.filepath, {
-      folder: 'nextjs_tests',
+      folder: 'nextjs_posts',
     });
 
-    const { title, description } = fields;
+    const { title, description, stock, inStock, price, discountPrice, category } = fields;
 
-    if (!title || !description) {
-      return res.status(400).json({ error: 'Title and description are required' });
+    let discountedPrice = 0
+    if (price && discountPrice) {
+      discountedPrice = calculateDiscount(price, discountPrice)
     }
 
+    if (!price) {
+      return res.status(400).json({ error: 'Price are required' });
+    }
+
+    const parsedStock = stock ? Number(stock) : 0;
+    if (isNaN(parsedStock) || parsedStock < 0) {
+      return res.status(400).json({ error: 'Invalid stock value' });
+    }
+
+    const parsedInStock = inStock === 'true' || inStock === true;
+
     const post = await Post.create({
-      title: title.toString(),
-      description: description.toString(),
+      title: String(title),
+      description: String(description),
+      stock: parsedStock,
+      inStock: parsedInStock,
+      price: Number(price),
+      category: String(category),
+      discountPrice: discountedPrice ? discountedPrice : 0,
       image: result.secure_url,
       imagePublicId: result.public_id,
-      user: req.user._id,
+      user: req.user._id
     });
 
     return res.status(201).json({ message: 'Post created successfully', post });
 
   } catch (error) {
-    return res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error creating post:", error);
+    return res.status(500).json({ error: error.message });
   }
 };
+
 
 export const updatePost = async (req, res, fields, files) => {
   try {
@@ -61,6 +81,12 @@ export const updatePost = async (req, res, fields, files) => {
     const updateData = {
       title: fields.title?.toString() || existingPost.title,
       description: fields.description?.toString() || existingPost.description,
+      stock: fields.stock,
+      inStock: fields.inStock,
+      price: fields.price,
+      category: fields.category,
+      discountPrice: fields.discountPrice,
+      user: req.user._id,
     };
 
     if (files?.image) {
@@ -158,7 +184,7 @@ export const getPostById = async (req, res) => {
     }
 
     const post = await Post.findOne({ _id: id, user: userId })
-      .populate('user', 'userName email');
+      .populate('user', 'userName _id');
 
     if (!post) {
       return res.status(404).json({
@@ -174,6 +200,11 @@ export const getPostById = async (req, res) => {
         title: post.title,
         description: post.description,
         image: post.image,
+        stock: post.stock,
+        inStock: post.inStock,
+        price: post.price,
+        category: post.category,
+        discountPrice: post.discountPrice,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
       },
@@ -201,6 +232,11 @@ export const getAllPosts = async (req, res) => {
         title: post.title,
         description: post.description,
         image: post.image,
+        stock: post.stock,
+        inStock: post.inStock,
+        price: post.price,
+        category: post.category,
+        discountPrice: post.discountPrice,
         user: post.user,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,

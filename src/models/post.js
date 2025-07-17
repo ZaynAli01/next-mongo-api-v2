@@ -1,9 +1,38 @@
 import mongoose from 'mongoose';
 
 
-const postSchema = new mongoose.Schema({
+const Post = new mongoose.Schema({
   title: { type: String },
   description: { type: String },
+  price: {
+    type: Number,
+    required: [true, 'Product price is required'],
+    min: [0, 'Price must be greater than or equal to 0'],
+    default: 0
+  },
+  discountPrice: {
+    type: Number,
+    validate: {
+      validator: function (val) {
+        return val < this.price;
+      },
+      message: 'Discount price must be less than the original price',
+    },
+  },
+  category: {
+    type: String,
+    index: true,
+    default: null
+  },
+  stock: {
+    type: Number,
+    default: 0,
+    min: [0, 'Stock cannot be negative'],
+  },
+  instock: {
+    type: Boolean,
+    default: true,
+  },
   image: {
     type: String,
     required: true,
@@ -14,9 +43,15 @@ const postSchema = new mongoose.Schema({
       message: props => `${props.value} is not a valid image URL!`
     }
   },
+  images: [
+    {
+      url: { type: String, default: null },
+      publicId: { type: String, default: null },
+    },
+  ],
   imagePublicId: {
     type: String,
-    required: true // because you need this to delete image from Cloudinary
+    required: true
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -25,4 +60,4 @@ const postSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-export default mongoose.models.Post || mongoose.model('Post', postSchema);
+export default mongoose.models.Post || mongoose.model('Post', Post);
