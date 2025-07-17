@@ -110,7 +110,6 @@ export const removeToCart = async (req, res) => {
   }
 };
 
-
 export const getAllProducts = async (req, res) => {
   const userId = req.user._id;
 
@@ -119,8 +118,6 @@ export const getAllProducts = async (req, res) => {
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
-
-
     res.status(200).json({
       message: "Products retrieved successfully",
       count: cart.products.length,
