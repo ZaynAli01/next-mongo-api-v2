@@ -1,7 +1,9 @@
 import User from '../models/user.js';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '@/utils/jwt.js';
-import { signUpValidationSchema, signInValidationSchema } from '@/utils/validations.js';
+import { signUpValidationSchema, signInValidationSchema, dateChecker } from '@/utils/validations.js';
+import cloudinary from '@/config/cloudinary';
+import { parseForm } from '@/utils/parseForm.js';
 import mongoose from 'mongoose';
 
 
@@ -39,7 +41,12 @@ export const signUp = async (req, res) => {
       user: {
         id: newUser._id,
         userName: newUser.userName,
+        fullName: newUser.fullName,
         email: newUser.email,
+        image: newUser.image,
+        gender: newUser.gender,
+        dateOfBirth: newUser.dateOfBirth,
+        bio: newUser.bio
       },
     });
   } catch (error) {
@@ -78,6 +85,8 @@ export const signIn = async (req, res) => {
       user: {
         id: user._id,
         userName: user.userName,
+        fullName: user.fullName,
+        gender: user.gender,
         email: user.email,
       },
       token,
@@ -90,24 +99,60 @@ export const signIn = async (req, res) => {
   }
 };
 
-
 export const updateUser = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { email, userName } = req.body;
+    const { fields, files } = await parseForm(req);
+    const { email, userName, fullName, dateOfBirth, gender, bio } = fields;
+
+    let cleanDate = null;
+    if (dateOfBirth) {
+      cleanDate = Array.isArray(dateOfBirth) ? dateOfBirth[0] : dateOfBirth;
+      cleanDate = cleanDate.replace(/"/g, '').trim(); // remove extra quotes
+      await dateChecker.validate({ dateOfBirth: cleanDate });
+    }
+
+    let imageUrl = null;
+    let imagePublicId = null;
+    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
+
+    if (imageFile && imageFile.filepath) {
+      const result = await cloudinary.uploader.upload(imageFile.filepath, {
+        folder: 'user-profile-images',
+      });
+      imageUrl = result.secure_url;
+      imagePublicId = result.public_id;
+    }
 
     if (email) {
-      const existing = await User.findOne({ email, _id: { $ne: userId } });
-      if (existing) {
+      const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingEmail) {
         return res.status(400).json({ error: 'Email is already in use by another user' });
       }
     }
 
-    const updated = await User.findByIdAndUpdate(
-      userId,
-      { userName, email },
-      { new: true, runValidators: true }
-    ).select('userName email');
+    if (userName) {
+      const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username is already in use by another user' });
+      }
+    }
+    const updateData = {};
+    if (email) updateData.email = email.toString();
+    if (fullName) updateData.fullName = fullName.toString();
+    if (userName) updateData.userName = userName.toString();
+    if (bio) updateData.bio = bio.toString();
+    if (gender) updateData.gender = gender.toString();
+    if (cleanDate) updateData.dateOfBirth = cleanDate;
+
+    if (imageUrl) {
+      updateData.image = imageUrl;
+      updateData.imagePublicId = imagePublicId;
+    }
+    const updated = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+      runValidators: true,
+    }).select('-password');
 
     if (!updated) {
       return res.status(404).json({ error: 'User not found' });
@@ -117,17 +162,21 @@ export const updateUser = async (req, res) => {
       message: 'User updated successfully',
       user: updated,
     });
+
   } catch (error) {
-    console.error('Error updating user:', error);
+    if (error.name === 'ValidationError' && error.errors) {
+      const messages = Object.values(error.errors)
+        .map(err => err?.message)
+        .filter(msg => msg);
+      return res.status(400).json({ error: 'Validation failed', details: messages });
+    }
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
-
 export const deleteUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const deletedUser = await User.findOneAndDelete({ _id: userId });
 
     if (!deletedUser) {
@@ -140,6 +189,7 @@ export const deleteUser = async (req, res) => {
         id: deletedUser._id,
         userName: deletedUser.userName,
         email: deletedUser.email,
+        image: deletedUser.image
       },
     });
 
