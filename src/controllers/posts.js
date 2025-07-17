@@ -64,29 +64,60 @@ export const updatePost = async (req, res, fields, files) => {
 
     const userId = req.user._id;
 
-    if (!postId) {
-      return res.status(400).json({ error: 'Post not found' });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(postId)) {
-      return res.status(404).json({ error: 'Post not found' });
+    if (!postId || !mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(404).json({ error: "Invalid or missing Post ID" });
     }
 
     const existingPost = await Post.findOne({ _id: postId, user: userId });
-
     if (!existingPost) {
-      return res.status(404).json({ error: 'Post not found or not authorized' });
+      return res.status(404).json({ error: "Post not found or not authorized" });
     }
+
+    const priceSent = fields.price !== undefined;
+    const discountSent = fields.discountPrice !== undefined;
+
+    const newPrice = priceSent ? Number(fields.price) : existingPost.price;
+    const newDiscountPercentage = discountSent ? Number(fields.discountPrice) : null;
+
+    let finalDiscountPrice;
+
+    if (priceSent && discountSent) {
+      if (newDiscountPercentage === 0) {
+        finalDiscountPrice = newPrice;
+      } else {
+        finalDiscountPrice = calculateDiscount(newPrice, newDiscountPercentage);
+      }
+    }
+    else if (!priceSent && discountSent) {
+      finalDiscountPrice = newDiscountPercentage === 0
+        ? existingPost.price
+        : calculateDiscount(existingPost.price, newDiscountPercentage);
+    }
+    else if (priceSent && !discountSent) {
+      finalDiscountPrice =
+        existingPost.discountPrice && existingPost.discountPrice < newPrice
+          ? existingPost.discountPrice
+          : newPrice;
+    }
+    else {
+      finalDiscountPrice = existingPost.discountPrice || existingPost.price;
+    }
+
+    if (finalDiscountPrice >= newPrice) {
+      finalDiscountPrice = newPrice;
+    }
+
+
 
     const updateData = {
       title: fields.title?.toString() || existingPost.title,
       description: fields.description?.toString() || existingPost.description,
-      stock: fields.stock,
-      inStock: fields.inStock,
-      price: fields.price,
-      category: fields.category,
-      discountPrice: fields.discountPrice,
-      user: req.user._id,
+      stock: fields.stock ? Number(fields.stock) : existingPost.stock,
+      inStock: fields.inStock ? Boolean(fields.inStock) : existingPost.inStock,
+      price: newPrice,
+      category: fields.category?.toString() || existingPost.category,
+      discountPrice: finalDiscountPrice,
+      user: userId,
     };
 
     if (files?.image) {
@@ -95,15 +126,14 @@ export const updatePost = async (req, res, fields, files) => {
       if (existingPost.imagePublicId) {
         try {
           await cloudinary.uploader.destroy(existingPost.imagePublicId);
-        } catch (cloudErr) {
-          console.error('Error deleting old image from Cloudinary:', cloudErr.message);
+        } catch (err) {
+          console.error("Error deleting old image from Cloudinary:", err.message);
         }
       }
 
       const result = await cloudinary.uploader.upload(imageFile.filepath, {
-        folder: 'nextjs_posts',
+        folder: "nextjs_posts",
       });
-
       updateData.image = result.secure_url;
       updateData.imagePublicId = result.public_id;
     }
@@ -114,7 +144,8 @@ export const updatePost = async (req, res, fields, files) => {
     });
 
     return res.status(200).json({
-      message: 'Post updated successfully',
+      success: true,
+      message: "Post updated successfully",
       post: updatedPost,
     });
 
