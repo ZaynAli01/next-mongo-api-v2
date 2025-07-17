@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Post from '@/models/post.js';
 import wishList from '@/models/wishList';
+import Cart from '@/models/addToCart'
 import { v2 as cloudinary } from 'cloudinary';
 
 
@@ -103,7 +104,30 @@ userSchema.pre('findOneAndDelete', async function (next) {
     } catch (err) {
       console.error('Wishlist deletion error:', err);
     }
+  }
 
+  if (user) {
+    const posts = await Post.find({ user: user._id });
+
+    for (const post of posts) {
+      try {
+        await cloudinary.uploader.destroy(post.imagePublicId);
+      } catch (err) {
+        console.error('Cloudinary deletion error:', err);
+      }
+      await post.deleteOne();
+    }
+
+    try {
+      const cart = await Cart.findOne({ user: user._id });
+      if (cart) {
+        await cart.deleteOne({ user: user._id });
+      } else {
+        console.log('No wishlist found for user:', user._id);
+      }
+    } catch (err) {
+      console.error('Wishlist deletion error:', err);
+    }
   }
 
   next();
