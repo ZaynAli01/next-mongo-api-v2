@@ -1,13 +1,26 @@
 import Order from "@/models/orderPlace.js";
 import Cart from "@/models/addToCart";
 import Product from "@/models/post"
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const placeOrder = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { fullName, address, city, state, postalCode, country, phone, paymentMethod = "COD" } = req.body;
 
-    if (!fullName || !address || !city || !country || !phone) {
+    const {
+      fullName,
+      address,
+      city,
+      state,
+      postalCode,
+      country,
+      phone,
+      paymentMethod
+    } = req.body;
+
+    if (!address || !city || !country || !phone) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: fullName, address, city, country, phone"
@@ -22,34 +35,58 @@ export const placeOrder = async (req, res) => {
       const price = item.product.discountPrice || item.product.price;
       const subtotal = price * item.quantity;
       totalAmount += subtotal;
-
       return {
         product: item.product._id,
         quantity: item.quantity,
-        price: price
+        price
       };
     });
+    if (paymentMethod === "COD" || paymentMethod === "cod") {
+      const order = new Order({
+        user: userId,
+        paymentMethod,
+        totalAmount,
+        shippingAddress: { fullName, address, city, state, postalCode, country, phone },
+        orderItems,
+        status: "Pending"
+      });
+      await order.save();
+      await Cart.findOneAndUpdate({ user: userId }, { $set: { products: [] } });
 
-    const order = new Order({
-      user: userId,
-      shippingAddress: { fullName, address, city, state, postalCode, country, phone },
-      paymentMethod,
-      orderItems,
-      totalAmount,
-      status: "Pending"
-    });
+      return res.status(201).json({
+        success: true,
+        message: "Order placed successfully (COD)",
+        totalAmount,
+        order
+      });
+    }
 
-    await order.save();
+    if (paymentMethod === "ONLINE" || paymentMethod === "online") {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: orderItems.map(item => ({
+          price_data: {
+            currency: "usd",
+            product_data: { name: `Product ${item.product}` },
+            unit_amount: Math.round(item.price * 100)
+          },
+          quantity: item.quantity
+        })),
+        success_url: "https://example.com/success",
+        cancel_url: "https://example.com/cancel"
+      });
 
-    await Cart.findOneAndUpdate({ user: userId }, { $set: { products: [] } });
+      return res.status(200).json({
+        success: true,
+        message: "Stripe Checkout Session created",
+        url: session.url
+      });
+    }
 
-    return res.status(201).json({
-      success: true,
-      message: "Order placed successfully",
-      order
-    });
+    return res.status(400).json({ success: false, message: "Invalid payment method" });
+
   } catch (error) {
-    console.error(error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
