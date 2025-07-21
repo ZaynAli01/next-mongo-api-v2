@@ -60,7 +60,7 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    if (paymentMethod.toLowerCase() === "onLine") {
+    if (paymentMethod.toLowerCase() === "online") {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
