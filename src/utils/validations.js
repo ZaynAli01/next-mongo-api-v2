@@ -14,12 +14,10 @@ export const signInValidationSchema = yup.object().shape({
 export const dateChecker = yup.object().shape({
   dateOfBirth: yup.string()
     .required('Date of birth is required')
-    .matches(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format') // Ensure year exists
+    .matches(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
     .test('is-valid-date', 'Invalid date', function (value) {
       const [year, month, day] = value.split('-').map(Number);
       const date = new Date(value);
-      // Check if it's a real date
-      console.log('dateOfBirth', yup.string())
       return (
         !isNaN(date.getTime()) &&
         date.getFullYear() === year &&
