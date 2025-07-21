@@ -102,13 +102,12 @@ export const signIn = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = req.user; // Current logged-in user
+    const user = req.user;
     const { fields, files } = await parseForm(req);
     const { email, userName, fullName, dateOfBirth, gender, bio } = fields;
 
     const updateData = {};
 
-    // ✅ Handle Date of Birth
     if (dateOfBirth) {
       let cleanDate = Array.isArray(dateOfBirth) ? dateOfBirth[0] : dateOfBirth;
       cleanDate = cleanDate.replace(/"/g, '').trim();
@@ -116,11 +115,9 @@ export const updateUser = async (req, res) => {
       updateData.dateOfBirth = cleanDate;
     }
 
-    // ✅ Handle Image Upload
     if (files?.image) {
       const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
 
-      // ✅ If user already has an image, delete it from Cloudinary
       if (user.imagePublicId) {
         try {
           await cloudinary.uploader.destroy(user.imagePublicId);
@@ -129,8 +126,6 @@ export const updateUser = async (req, res) => {
           console.error("Error deleting old image:", err.message);
         }
       }
-
-      // ✅ Upload new image
       const result = await cloudinary.uploader.upload(imageFile.filepath, {
         folder: 'user-profile-images',
       });
@@ -139,7 +134,6 @@ export const updateUser = async (req, res) => {
       updateData.imagePublicId = result.public_id;
     }
 
-    // ✅ Validate email uniqueness
     if (email) {
       const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
       if (existingEmail) {
@@ -148,7 +142,6 @@ export const updateUser = async (req, res) => {
       updateData.email = email.toString();
     }
 
-    // ✅ Validate username uniqueness
     if (userName) {
       const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
       if (existingUser) {
@@ -161,7 +154,6 @@ export const updateUser = async (req, res) => {
     if (bio) updateData.bio = bio.toString();
     if (gender) updateData.gender = gender.toString();
 
-    // ✅ Update user
     const updated = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
       runValidators: true,

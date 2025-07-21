@@ -4,7 +4,7 @@ export function calculateDiscount(price, discountPercentage) {
   }
 
   if (discountPercentage === 0) {
-    return price; // No discount
+    return price;
   }
 
   const discountedPrice = price - (price * discountPercentage / 100);

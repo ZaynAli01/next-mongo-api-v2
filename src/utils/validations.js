@@ -34,5 +34,3 @@ export const dateChecker = yup.object().shape({
       return inputYear < currentYear;
     }),
 });
-
-

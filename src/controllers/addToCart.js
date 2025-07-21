@@ -59,7 +59,6 @@ export const createCart = async (req, res) => {
 
 export const removeToCart = async (req, res) => {
   const { id } = req.query;
-  //check whether we use body in deleting an object?
   const { quantity, flag } = req.body;
   const userId = req.user._id;
   try {
@@ -116,12 +115,9 @@ export const getAllProducts = async (req, res) => {
 
   try {
     const cart = await AddToCart.findOne({ user: userId }).populate('products.product');
-    //check if user.cart will work or not?
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
-
-
     res.status(200).json({
       message: "Products retrieved successfully",
       count: cart.products.length,

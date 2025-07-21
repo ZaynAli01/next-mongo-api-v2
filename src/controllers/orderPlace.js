@@ -1,6 +1,5 @@
 import Order from "@/models/orderPlace.js";
 import Cart from "@/models/addToCart";
-import Product from "@/models/post"
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -41,7 +40,7 @@ export const placeOrder = async (req, res) => {
         price
       };
     });
-    if (paymentMethod === "COD") {
+    if (paymentMethod.toLowerCase() === 'cod') {
       const order = new Order({
         user: userId,
         paymentMethod,
@@ -61,7 +60,7 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    if (paymentMethod === "ONLINE" || paymentMethod === "onLine") {
+    if (paymentMethod.toLowerCase() === "onLine") {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
@@ -94,13 +93,11 @@ export const placeOrder = async (req, res) => {
 export const viewOrder = async (req, res) => {
   try {
     const userId = req.user._id;
-    //use correct variables name
     const orders = await Order.find({ user: userId });
 
     if (!orders || orders.length === 0) {
       return res.status(404).json({ success: false, message: "No orders found" });
     }
-    //refine it
     const formattedOrders = orders.map((order) => {
       return {
         id: order.id,
@@ -127,4 +124,3 @@ export const viewOrder = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-//pagination
