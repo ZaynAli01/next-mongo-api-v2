@@ -102,53 +102,66 @@ export const signIn = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const userId = req.user.id;
+    const user = req.user; // Current logged-in user
     const { fields, files } = await parseForm(req);
     const { email, userName, fullName, dateOfBirth, gender, bio } = fields;
 
-    let cleanDate = null;
+    const updateData = {};
+
+    // ✅ Handle Date of Birth
     if (dateOfBirth) {
-      cleanDate = Array.isArray(dateOfBirth) ? dateOfBirth[0] : dateOfBirth;
-      cleanDate = cleanDate.replace(/"/g, '').trim(); // remove extra quotes
+      let cleanDate = Array.isArray(dateOfBirth) ? dateOfBirth[0] : dateOfBirth;
+      cleanDate = cleanDate.replace(/"/g, '').trim();
       await dateChecker.validate({ dateOfBirth: cleanDate });
+      updateData.dateOfBirth = cleanDate;
     }
 
-    let imageUrl = null;
-    let imagePublicId = null;
-    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
+    // ✅ Handle Image Upload
+    if (files?.image) {
+      const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
 
-    if (imageFile && imageFile.filepath) {
+      // ✅ If user already has an image, delete it from Cloudinary
+      if (user.imagePublicId) {
+        try {
+          await cloudinary.uploader.destroy(user.imagePublicId);
+          console.log("Old image deleted successfully");
+        } catch (err) {
+          console.error("Error deleting old image:", err.message);
+        }
+      }
+
+      // ✅ Upload new image
       const result = await cloudinary.uploader.upload(imageFile.filepath, {
         folder: 'user-profile-images',
       });
-      imageUrl = result.secure_url;
-      imagePublicId = result.public_id;
+
+      updateData.image = result.secure_url;
+      updateData.imagePublicId = result.public_id;
     }
 
+    // ✅ Validate email uniqueness
     if (email) {
       const existingEmail = await User.findOne({ email, _id: { $ne: userId } });
       if (existingEmail) {
         return res.status(400).json({ error: 'Email is already in use by another user' });
       }
+      updateData.email = email.toString();
     }
 
+    // ✅ Validate username uniqueness
     if (userName) {
       const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
       if (existingUser) {
         return res.status(400).json({ error: 'Username is already in use by another user' });
       }
+      updateData.userName = userName.toString();
     }
-    const updateData = {};
-    if (email) updateData.email = email.toString();
+
     if (fullName) updateData.fullName = fullName.toString();
-    if (userName) updateData.userName = userName.toString();
     if (bio) updateData.bio = bio.toString();
     if (gender) updateData.gender = gender.toString();
-    if (cleanDate) updateData.dateOfBirth = cleanDate;
 
-    if (imageUrl) {
-      updateData.image = imageUrl;
-      updateData.imagePublicId = imagePublicId;
-    }
+    // ✅ Update user
     const updated = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
       runValidators: true,
@@ -164,6 +177,7 @@ export const updateUser = async (req, res) => {
     });
 
   } catch (error) {
+    console.error(error);
     if (error.name === 'ValidationError' && error.errors) {
       const messages = Object.values(error.errors)
         .map(err => err?.message)
@@ -173,6 +187,7 @@ export const updateUser = async (req, res) => {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
 
 export const deleteUser = async (req, res) => {
   try {
