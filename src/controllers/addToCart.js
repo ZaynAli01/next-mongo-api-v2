@@ -83,7 +83,6 @@ export const removeToCart = async (req, res) => {
 
     if (Boolean(flag)) {
       cart.products = cart.products.filter(item => item.product.toString() !== id);
-      console.log("dfsfs", cart.products)
     } else {
       let qtyToSubtract = Number(quantity);
       if (!qtyToSubtract || qtyToSubtract < 1) {
@@ -119,8 +118,6 @@ export const getAllProducts = async (req, res) => {
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
-
-
     res.status(200).json({
       message: "Products retrieved successfully",
       count: cart.products.length,
@@ -144,6 +141,6 @@ export const getAllProducts = async (req, res) => {
       })
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(422).json({ error: err.message });
   }
 };

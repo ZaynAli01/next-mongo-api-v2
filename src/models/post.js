@@ -10,6 +10,10 @@ const Post = new mongoose.Schema({
     min: [0, 'Price must be greater than or equal to 0'],
     default: 0
   },
+  discountPercentage: {
+    type: Number,
+    default: 0
+  },
   discountPrice: {
     type: Number,
     default: 0

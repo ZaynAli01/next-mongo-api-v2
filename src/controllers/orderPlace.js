@@ -1,6 +1,5 @@
 import Order from "@/models/orderPlace.js";
 import Cart from "@/models/addToCart";
-import Product from "@/models/post"
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -41,7 +40,7 @@ export const placeOrder = async (req, res) => {
         price
       };
     });
-    if (paymentMethod === "COD" || paymentMethod === "cod") {
+    if (paymentMethod.toLowerCase() === 'cod') {
       const order = new Order({
         user: userId,
         paymentMethod,
@@ -61,7 +60,7 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    if (paymentMethod === "ONLINE" || paymentMethod === "online") {
+    if (paymentMethod.toLowerCase() === "online") {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
@@ -94,37 +93,26 @@ export const placeOrder = async (req, res) => {
 export const viewOrder = async (req, res) => {
   try {
     const userId = req.user._id;
+    const orders = await Order.find({ user: userId });
 
-    const ordersCart = await Order.find({ user: userId });
-
-    if (!ordersCart || ordersCart.length === 0) {
+    if (!orders || orders.length === 0) {
       return res.status(404).json({ success: false, message: "No orders found" });
     }
-
-    const formattedOrders = await Promise.all(
-      ordersCart.map(async order => {
-        const detailedItems = await Promise.all(
-          order.orderItems.map(async item => {
-            const product = await Product.findById(item.product).select("title description image");
-            return {
-              title: product.title,
-              description: product.description,
-              image: product.image,
-              quantity: item.quantity,
-              price: item.price,
-            };
-          })
-        );
-        return {
-          orderId: order._id,
-          shippingAddress: order.shippingAddress,
-          paymentMethod: order.paymentMethod,
-          status: order.status,
-          totalAmount: order.totalAmount,
-          product: detailedItems,
-        };
-      })
-    );
+    const formattedOrders = orders.map((order) => {
+      return {
+        id: order.id,
+        totalPrice: order.totalAmount,
+        products: order.orderItems.map((item) => {
+          return {
+            title: item.product.title,
+            description: item.product.description,
+            image: item.product.image,
+            quantity: item.quantity,
+            price: item.price,
+          };
+        })
+      }
+    })
 
     res.status(200).json({
       success: true,

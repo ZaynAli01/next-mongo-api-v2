@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+//implement constant file and get values from there
+const COD = "COD"
 
 const shippingAddressSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
