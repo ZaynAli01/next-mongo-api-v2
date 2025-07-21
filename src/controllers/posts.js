@@ -8,25 +8,24 @@ import { calculateDiscount } from '@/utils/calculateDiscount';
 export const createPost = async (req, res) => {
   try {
     const { fields, files } = await parseForm(req);
-    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
 
+    const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
     if (!imageFile || !imageFile.filepath) {
       return res.status(400).json({ error: 'No image file received' });
     }
-
     const result = await cloudinary.uploader.upload(imageFile.filepath, {
       folder: 'nextjs_posts',
     });
 
-    const { title, description, stock, inStock, price, discountPrice, category } = fields;
+    const { title, description, stock, inStock, price, discountPercentage, category, discountPrice } = fields;
 
-    let discountedPrice = 0
-    if (price && discountPrice) {
-      discountedPrice = calculateDiscount(price, discountPrice)
+    if (!title || !description || !price) {
+      return res.status(400).json({ error: 'Title, description, and price are required' });
     }
 
-    if (!price) {
-      return res.status(400).json({ error: 'Price are required' });
+    const parsedPrice = Number(price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      return res.status(400).json({ error: 'Invalid price value' });
     }
 
     const parsedStock = stock ? Number(stock) : 0;
@@ -36,26 +35,44 @@ export const createPost = async (req, res) => {
 
     const parsedInStock = inStock === 'true' || inStock === true;
 
+    const parsedDiscountPercentage = discountPercentage
+      ? Number(discountPercentage)
+      : 0;
+
+    if (parsedDiscountPercentage < 0 || parsedDiscountPercentage > 100) {
+      return res.status(400).json({ error: 'Discount percentage must be between 0 and 100' });
+    }
+
+    let finalDiscountPrice = parsedPrice;
+    if (parsedDiscountPercentage > 0) {
+      finalDiscountPrice = calculateDiscount(parsedPrice, parsedDiscountPercentage);
+    }
+
     const post = await Post.create({
       title: String(title),
       description: String(description),
       stock: parsedStock,
       inStock: parsedInStock,
-      price: Number(price),
+      price: parsedPrice,
       category: String(category),
-      discountPrice: discountedPrice ? discountedPrice : 0,
+      discountPrice: Number(discountPrice) ? Number(discountPrice) : finalDiscountPrice,
+      discountPercentage: parsedDiscountPercentage,
       image: result.secure_url,
       imagePublicId: result.public_id,
-      user: req.user._id
+      user: req.user._id,
     });
 
-    return res.status(201).json({ message: 'Post created successfully', post });
+    return res.status(201).json({
+      message: 'Post created successfully',
+      post,
+    });
 
   } catch (error) {
-    console.error("Error creating post:", error);
-    return res.status(500).json({ error: error.message });
+    console.error('Error creating post:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
 
 
 export const updatePost = async (req, res, fields, files) => {
@@ -72,42 +89,15 @@ export const updatePost = async (req, res, fields, files) => {
     if (!existingPost) {
       return res.status(404).json({ error: "Post not found or not authorized" });
     }
+    const discountPercentage = fields.discountPercentage !== undefined
+      ? Number(fields.discountPercentage)
+      : existingPost.discountPercentage;
 
-    const priceSent = fields.price !== undefined;
-    const discountSent = fields.discountPrice !== undefined;
+    const newPrice = fields.price !== undefined
+      ? Number(fields.price)
+      : existingPost.price;
 
-    const newPrice = priceSent ? Number(fields.price) : existingPost.price;
-    const newDiscountPercentage = discountSent ? Number(fields.discountPrice) : null;
-
-    let finalDiscountPrice;
-
-    if (priceSent && discountSent) {
-      if (newDiscountPercentage === 0) {
-        finalDiscountPrice = newPrice;
-      } else {
-        finalDiscountPrice = calculateDiscount(newPrice, newDiscountPercentage);
-      }
-    }
-    else if (!priceSent && discountSent) {
-      finalDiscountPrice = newDiscountPercentage === 0
-        ? existingPost.price
-        : calculateDiscount(existingPost.price, newDiscountPercentage);
-    }
-    else if (priceSent && !discountSent) {
-      finalDiscountPrice =
-        existingPost.discountPrice && existingPost.discountPrice < newPrice
-          ? existingPost.discountPrice
-          : newPrice;
-    }
-    else {
-      finalDiscountPrice = existingPost.discountPrice || existingPost.price;
-    }
-
-    if (finalDiscountPrice >= newPrice) {
-      finalDiscountPrice = newPrice;
-    }
-
-
+    const newDiscount = calculateDiscount(newPrice, discountPercentage)
 
     const updateData = {
       title: fields.title?.toString() || existingPost.title,
@@ -115,8 +105,9 @@ export const updatePost = async (req, res, fields, files) => {
       stock: fields.stock ? Number(fields.stock) : existingPost.stock,
       inStock: fields.inStock ? Boolean(fields.inStock) : existingPost.inStock,
       price: newPrice,
+      discountPercentage: discountPercentage,
+      discountPrice: newDiscount,
       category: fields.category?.toString() || existingPost.category,
-      discountPrice: finalDiscountPrice,
       user: userId,
     };
 
@@ -284,7 +275,6 @@ export const deleteAllPosts = async (req, res) => {
     const userId = req.user._id;
 
     const postsToDelete = await Post.find({ user: userId });
-
     if (postsToDelete.length === 0) {
       return res.status(200).json({
         success: true,
