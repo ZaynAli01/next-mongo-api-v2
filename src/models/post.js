@@ -12,12 +12,7 @@ const Post = new mongoose.Schema({
   },
   discountPrice: {
     type: Number,
-    validate: {
-      validator: function (val) {
-        return val < this.price;
-      },
-      message: 'Discount price must be less than the original price',
-    },
+    default: 0
   },
   category: {
     type: String,
